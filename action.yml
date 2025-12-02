@@ -19,9 +19,6 @@ inputs:
     required: true
 
 outputs:
-  artifact-id:
-    value: ${{ steps.registerBuildArtifacts.outputs.artifact-id }}
-    description: "The unique identifier of the artifact. If multiple artifacts are registered, this will be the ID of the first one."
   artifact-ids:
     value: ${{ steps.registerBuildArtifacts.outputs.artifact-ids }}
     description: "The unique identifiers in JSON format of the artifacts when multiple are registered."
