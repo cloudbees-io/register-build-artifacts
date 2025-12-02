@@ -1,0 +1,191 @@
+apiVersion: automation.cloudbees.io/v1alpha1
+kind: action
+name: 'Register build artifacts'
+description: 'Creates an artifact versions association with the workflow run.'
+
+inputs:
+  artifact-metadata:
+    description: |
+      A JSON array of artifact metadata objects. Each object should contain the fields:
+        - name
+        - version
+        - url
+        - digest (optional)
+        - labels (optional)
+        - commit (optional)
+        - repositoryUrl (optional)
+        - ref (optional)
+        - componentId (optional)
+    required: true
+
+outputs:
+  artifact-id:
+    value: ${{ steps.registerBuildArtifacts.outputs.artifact-id }}
+    description: "The unique identifier of the artifact. If multiple artifacts are registered, this will be the ID of the first one."
+  artifact-ids:
+    value: ${{ steps.registerBuildArtifacts.outputs.artifact-ids }}
+    description: "The unique identifiers in JSON format of the artifacts when multiple are registered."
+
+runs:
+  using: composite
+  steps:
+    - id: registerBuildArtifacts
+      name: Register Build Artifacts
+      uses: docker://esolang/jq:latest
+      run: |
+        
+        if [ -z "$INPUT_METADATA" ]; then
+          echo "Error: artifact-metadata input is required."
+          exit 1
+        fi
+        echo "$INPUT_METADATA" | /usr/bin/jq empty
+        if [ $? -ne 0 ]; then
+          echo "Error: artifact-metadata input is not valid JSON."
+          exit 1
+        fi
+        
+        # Set the fold width to match the table column width
+        FOLD_WIDTH=48
+        
+        # Helper function to fold and print a parameter name and value 
+        fold_and_print() {
+          local pName="$1"
+          local pValue="$2"
+          folded=$(echo "$pValue" | fold -s -w $FOLD_WIDTH)
+          first=1
+          echo "$folded" | while IFS= read -r line; do
+            if [ $first -eq 1 ]; then
+              printf "| \033[1m%-20s\033[0m | %-50s |\n" "$pName" "$line"
+              first=0
+            else
+              printf "| \033[1m%-20s\033[0m | %-50s |\n" "" "$line"
+            fi
+          done
+        }
+        
+        # Function to print inputs in a formatted table
+        print_inputs() {
+          echo "+----------------------+----------------------------------------------------+"
+          printf "| \033[1m%-20s\033[0m | \033[1m%-50s\033[0m |\n" "Parameter" "Value"
+          echo "+----------------------+----------------------------------------------------+"
+          printf "| \033[1m%-20s\033[0m | %-50s |\n" "name" "$inputName"
+          fold_and_print "url" "$inputUrl"
+          printf "| \033[1m%-20s\033[0m | %-50s |\n" "version" "$inputVersion"
+          fold_and_print "digest" "$inputDigest"
+          printf "| \033[1m%-20s\033[0m | %-50s |\n" "component-id" "$inputComponentId"
+          printf "| \033[1m%-20s\033[0m | %-50s |\n" "commit" "$inputCommit"
+          printf "| \033[1m%-20s\033[0m | %-50s |\n" "repository-url" "$inputRepositoryUrl"
+          printf "| \033[1m%-20s\033[0m | %-50s |\n" "ref" "$inputRef"
+          fold_and_print "labels" "$inputLabels"
+          echo "+----------------------+----------------------------------------------------+"        
+        }
+        
+        # Parse the artifact-metadata input JSON array and register each artifact
+        echo "Registering build artifacts..."
+        artifact_count=$(echo "$INPUT_METADATA" | /usr/bin/jq 'length')
+        printf "Number of artifacts to register: $artifact_count\n\n"
+        
+        # Initialize an empty JSON object to hold registered artifact IDs with their URLs
+        registered_ids_json="{}"
+        
+        for i in $(seq 0 $((artifact_count - 1))); do
+          artifact=$(echo "$INPUT_METADATA" | /usr/bin/jq ".[$i]")
+          
+          inputName=$(echo "$artifact" | /usr/bin/jq -r '.name')
+          inputVersion=$(echo "$artifact" | /usr/bin/jq -r '.version')
+          inputUrl=$(echo "$artifact" | /usr/bin/jq -r '.url')
+          inputDigest=$(echo "$artifact" | /usr/bin/jq -r '.digest // empty')
+          inputLabels=$(echo "$artifact" | /usr/bin/jq -r '.labels // empty')
+          inputCommit=$(echo "$artifact" | /usr/bin/jq -r '.commit // empty')
+          inputRepositoryUrl=$(echo "$artifact" | /usr/bin/jq -r '.repositoryUrl // empty')
+          inputRef=$(echo "$artifact" | /usr/bin/jq -r '.ref // empty')
+          inputComponentId=$(echo "$artifact" | /usr/bin/jq -r '.componentId // empty')
+        
+          formatted_labels=$(echo "$inputLabels" | awk -F',' '{for(i=1;i<=NF;i++){gsub(/^[ \t\r\n]+|[ \t\r\n]+$/, "", $i); printf "\"%s\"%s", $i, (i<NF?",":"")}}' | sed 's/^/[/; s/$/]/')
+        
+          echo "Registering artifact $((i + 1)) of $artifact_count: $inputName, version $inputVersion"
+          
+          # Create JSON payload
+          jq_args="
+            -n
+            --arg runId $CLOUDBEES_RUN_ID
+            --arg runAttempt $CLOUDBEES_RUN_ATTEMPT
+            --arg name $inputName
+            --arg url $inputUrl
+            --arg version $inputVersion
+          "
+          
+          jq_template='{
+            runId: $runId,
+            runAttempt: $runAttempt,
+            name: $name,
+            url: $url,
+            version: $version
+          }'
+  
+          if [ -n "$formatted_labels" ]; then
+            jq_args="$jq_args --argjson labels $formatted_labels "
+            jq_template="$jq_template + ( \$labels | select(length > 0) | {labels: .} ) "
+          fi
+  
+          if [ -n "$inputCommit" ]; then
+            jq_args="$jq_args --arg commitId $inputCommit --arg repositoryUrl $inputRepositoryUrl --arg ref $inputRef "
+            jq_template="$jq_template + ( \$commitId | select(length > 0) | {commit: {repositoryUrl: \$repositoryUrl, commitId: \$commitId, ref: \$ref}} ) "
+          fi
+  
+          if [ -n "$inputDigest" ]; then
+            jq_args="$jq_args --arg digest $inputDigest "
+            jq_template="$jq_template + ( \$digest      | select(length > 0)      | {digest: . } ) "
+          fi
+  
+          if [ -n "$inputComponentId" ]; then
+            jq_args="$jq_args --arg componentId $inputComponentId "
+            jq_template="$jq_template + ( \$componentId | select(length > 0)      | {componentId: .} ) "
+          fi
+  
+          /usr/bin/jq $jq_args "$jq_template" > /tmp/payload.json
+  
+          # Display the generated payload
+          echo "Request payload:"
+          print_inputs
+        
+          # Make CloudBees Unify API call to create artifact_info record
+          response=$(curl --retry 5 --retry-delay 10 --retry-all-errors --silent --show-error --fail-with-body \
+            -X 'POST' "$URL/v3/artifactinfos" \
+            -H "Authorization: Bearer $JWT" \
+            -H 'Content-Type: application/json' \
+            --data-binary '@/tmp/payload.json') || command_failed=1
+          
+          # Check if the API call failed
+          if [ ${command_failed:-0} -eq 1 ]; then
+            echo "CloudBees Unify API call failed with error: $response"
+            exit 1
+          fi
+          
+          # If successful, show the response nicely
+          echo ""
+          echo "CloudBees Unify API success response:"
+          echo "$response" | /usr/bin/jq || echo "$response"
+          
+          # Extract the artifactId
+          id=$(echo "$response" | /usr/bin/jq -r '.id // empty')
+
+          registered_ids_json=$(echo "$registered_ids_json" | /usr/bin/jq --arg k "$inputUrl" --arg v "$id" '. + {($k): $v}')
+        
+          # add a separator between artifacts but not after the last one
+          [ $i -lt $((artifact_count - 1)) ] && printf "\n\n\n"
+        done
+
+        # Store outputs
+        if [ "$(echo "$registered_ids_json" | /usr/bin/jq 'length > 0')" = "true" ]; then       
+          # Set the list of registered IDs as a JSON array output
+          echo $registered_ids_json > $CLOUDBEES_OUTPUTS/artifact-ids
+        fi
+
+      env:
+        JWT: ${{ cloudbees.api.token }}
+        URL: ${{ cloudbees.api.url }}
+        INPUT_METADATA: ${{ inputs.artifact-metadata }}
+        CLOUDBEES_RUN_ID: ${{ cloudbees.run_id }}
+        CLOUDBEES_RUN_ATTEMPT: ${{ cloudbees.run_attempt }}
+

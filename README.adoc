@@ -1,0 +1,148 @@
+= CloudBees action: Register build artifacts
+
+Use this action to register one or more artifact versions in CloudBees Unify from a workflow run.
+The action accepts a JSON array of artifact metadata objects, allowing you to register multiple artifacts in a single run.
+
+[NOTE]
+====
+Do not include the `register-build-artifacts` action for the same artifact version with any of the following actions, as the resulting run would register duplicate artifact entries to CloudBees Unify.
+
+* link:https://github.com/cloudbees-io/ecr-promote-image[Promote an image in Amazon ECR]
+* link:https://github.com/cloudbees-io/s3-upload-object[Store an object on Amazon S3] (if `send-artifact-info: true`)
+* link:https://github.com/cloudbees-io/crane[Copy Docker images with Crane]
+* link:https://github.com/cloudbees-io/helm-push[Push a Helm chart]
+* link:https://github.com/cloudbees-io/jfrog-artifactory-promote-image[Promote an image from JFrog Artifactory]
+* link:https://github.com/cloudbees-io/jfrog-artifactory-upload-file[Upload a file to JFrog Artifactory] (if `send-artifact-info: true`)
+* link:https://github.com/cloudbees-io/kaniko[Build and publish Docker images with Kaniko]
+====
+
+== Inputs
+
+[cols="20%a,20%a,10%a,50%a",options="header"]
+.Input details
+|===
+
+| Input name
+| Data type
+| Required?
+| Description
+
+| `artifact-metadata`
+| String (JSON)
+| YES
+| A JSON array of artifact metadata objects.
+    Each object must include:
+
+    * `name` — artifact name (**required**)
+    * `version` — version (**required**)
+    * `url` — artifact URL (**required**)
+    * `digest` — digest (**optional**)
+    * `labels` — list of labels (**optional**)
+    * `commit` — commit info object (**optional**)
+    * `repositoryUrl` — repository URL (**optional**)
+    * `ref` — branch or tag reference (**optional**)
+    * `componentId` — component identifier (**optional**)
+|===
+
+[#footnote]
+^[1]^ By default, this action associates the artifact version with the code commit associated with the workflow run in the workflow's repository/branch.
+If a different commit/repository/branch has been checked out for building the artifact, specify that commit ID instead. If you do not want to associate a commit with this artifact version, specify an empty commit.
+
+== Outputs
+
+[cols="2a,1a,3a",options="header"]
+.Output details
+|===
+| Output name
+| Data type
+| Description
+
+| `artifact-ids`
+| JSON string
+| The unique identifiers in JSON format of the artifacts when multiple are registered.
+|===
+
+
+== Usage examples
+
+.Single artifact example
+[source,yaml]
+----
+jobs:
+  register_build_artifacts:
+    uses: cloudbees-io/register-build-artifacts@v1
+    with:
+      artifact-metadata: |
+        [
+          {
+            "name": "myApp",
+            "version": "1.0.0",
+            "url": "docker.io/myapp/myimg:1.0.0"
+          }
+        ]
+----
+
+.Multiple artifacts example
+[source,yaml]
+----
+jobs:
+  register_build_artifacts:
+    uses: cloudbees-io/register-build-artifacts@v1
+    with:
+      artifact-metadata: |
+        [
+          {
+            "name": "myApp",
+            "version": "1.0.0",
+            "url": "docker.io/myapp/myimg:1.0.0"
+          },
+          {
+            "name": "myService",
+            "url": "docker.io/myorg/myservice:2.3.4",
+            "version": "2.3.4",
+            "labels": [
+              "api",
+              "stable"
+            ],
+            "commit": {
+              "repositoryUrl": "https://github.com/example/myservice.git",
+              "commitId": "789xyz654wvu",
+              "ref": "refs/tags/v2.3.4"
+            },
+            "digest": "sha256:abcdef1234567890",
+            "componentId": "fa0592f9-88f8-4f5d-9f37-580a93ba55ce"
+          }
+        ]
+----
+
+.Using output parameters
+[source,yaml]
+----
+- name: Register artifacts
+  id: register
+  uses: cloudbees-io/register-build-artifacts@v1
+  with:
+    artifact-metadata: |
+      [
+        {
+          "name": "myApp",
+          "version": "1.0.0",
+          "url": "docker.io/myapp/myimg:1.0.0"
+        }
+      ]
+- name: Print output parameter artifact IDs
+  uses: docker://alpine:latest
+  shell: sh
+  run: |
+    echo "Artifact ID: ${{ steps.register.outputs.artifact-ids }}"
+----
+
+== License
+
+This code is made available under the
+link:https://opensource.org/license/mit/[MIT license].
+
+== References
+
+* Learn more about link:https://docs.cloudbees.com/docs/cloudbees-saas-platform-actions/latest/[using actions in CloudBees workflows].
+* Learn about link:https://docs.cloudbees.com/docs/cloudbees-saas-platform/latest/[CloudBees Unify].
