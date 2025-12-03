@@ -3,6 +3,9 @@
 Use this action to register one or more artifact versions in CloudBees Unify from a workflow run.
 The action accepts a JSON array of artifact metadata objects, allowing you to register multiple artifacts in a single run.
 
+:tip-caption: :bulb:
+TIP: When registering just one artifact version, you can use link:https://github.com/cloudbees-io/register-build-artifact[register-build-artifact] as an alternative to this action.
+
 [NOTE]
 ====
 Do not include the `register-build-artifacts` action for the same artifact version with any of the following actions, as the resulting run would register duplicate artifact entries to CloudBees Unify.
