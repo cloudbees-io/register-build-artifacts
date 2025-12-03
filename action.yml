@@ -176,7 +176,7 @@ runs:
         # Store outputs
         if [ "$(echo "$registered_ids_json" | /usr/bin/jq 'length > 0')" = "true" ]; then       
           # Set the list of registered IDs as a JSON array output
-          echo $registered_ids_json > $CLOUDBEES_OUTPUTS/artifact-ids
+          echo "$registered_ids_json" > $CLOUDBEES_OUTPUTS/artifact-ids
         fi
 
       env:
