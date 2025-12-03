@@ -59,7 +59,7 @@ If a different commit/repository/branch has been checked out for building the ar
 
 | `artifact-ids`
 | JSON string
-| The unique identifiers in JSON format of the artifacts when multiple are registered.
+| The output is a JSON object mapping each artifact's `url` to its unique artifact ID.
 |===
 
 
@@ -70,16 +70,19 @@ If a different commit/repository/branch has been checked out for building the ar
 ----
 jobs:
   register_build_artifacts:
-    uses: cloudbees-io/register-build-artifacts@v1
-    with:
-      artifact-metadata: |
-        [
-          {
-            "name": "myApp",
-            "version": "1.0.0",
-            "url": "docker.io/myapp/myimg:1.0.0"
-          }
-        ]
+    steps:
+      - name: Register Build Artifacts
+        uses: cloudbees-io/register-build-artifacts@main
+        id: register
+        with:
+          artifact-metadata: |
+            [
+              {
+                "name": "myApp",
+                "version": "1.0.0",
+                "url": "docker.io/myapp/myimg:1.0.0"
+              }
+            ]
 ----
 
 .Multiple artifacts example
@@ -87,54 +90,52 @@ jobs:
 ----
 jobs:
   register_build_artifacts:
-    uses: cloudbees-io/register-build-artifacts@v1
-    with:
-      artifact-metadata: |
-        [
-          {
-            "name": "myApp",
-            "version": "1.0.0",
-            "url": "docker.io/myapp/myimg:1.0.0"
-          },
-          {
-            "name": "myService",
-            "url": "docker.io/myorg/myservice:2.3.4",
-            "version": "2.3.4",
-            "labels": [
-              "api",
-              "stable"
-            ],
-            "commit": {
-              "repositoryUrl": "https://github.com/example/myservice.git",
-              "commitId": "789xyz654wvu",
-              "ref": "refs/tags/v2.3.4"
-            },
-            "digest": "sha256:abcdef1234567890",
-            "componentId": "fa0592f9-88f8-4f5d-9f37-580a93ba55ce"
-          }
-        ]
+    steps:
+      - name: Register Build Artifacts
+        uses: cloudbees-io/register-build-artifacts@main
+        id: register
+        with:
+          artifact-metadata: |
+            [
+              {
+                "name": "myApp",
+                "version": "1.0.0",
+                "url": "docker.io/myapp/myimg:1.0.0"
+              },
+              {
+                "name": "myService",
+                "url": "docker.io/myorg/myservice:2.3.4",
+                "version": "2.3.4",
+                "labels": "api, backend, stable",
+                "repositoryUrl": "https://github.com/example/myservice.git",
+                "commitId": "789xyz654wvu",
+                "ref": "refs/tags/v2.3.4",
+                "digest": "sha256:abcdef1234567890",
+                "componentId": "fa0592f9-88f8-4f5d-9f37-580a93ba55ce"
+              }
+            ]
 ----
 
 .Using output parameters
 [source,yaml]
 ----
-- name: Register artifacts
+- name: Register artifacts 2
   id: register
-  uses: cloudbees-io/register-build-artifacts@v1
+  uses: cloudbees-io/register-build-artifacts@main
   with:
     artifact-metadata: |
       [
         {
-          "name": "myApp",
-          "version": "1.0.0",
-          "url": "docker.io/myapp/myimg:1.0.0"
+          "name": "myApp2",
+          "version": "1.0.02",
+          "url": "docker.io/myapp/myimg:1.0.02"
         }
       ]
 - name: Print output parameter artifact IDs
   uses: docker://alpine:latest
   shell: sh
   run: |
-    echo "Artifact ID: ${{ steps.register.outputs.artifact-ids }}"
+    echo "Artifact IDs: ${{ steps.register.outputs.artifact-ids }}"
 ----
 
 == License
