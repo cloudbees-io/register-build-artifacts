@@ -20,13 +20,13 @@ inputs:
 
 outputs:
   artifact-ids:
-    value: ${{ steps.registerBuildArtifacts.outputs.artifact-ids }}
+    value: ${{ steps.register-build-artifacts.outputs.artifact-ids }}
     description: "The unique identifiers in JSON format of the artifacts when multiple are registered."
 
 runs:
   using: composite
   steps:
-    - id: registerBuildArtifacts
+    - id: register-build-artifacts
       name: Register Build Artifacts
       uses: docker://esolang/jq:latest
       run: |
