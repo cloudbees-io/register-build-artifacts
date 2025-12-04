@@ -104,15 +104,14 @@ runs:
           echo "Registering artifact $((i + 1)) of $artifact_count: $inputName, version $inputVersion"
           
           # Create JSON payload
-          jq_args="
-            -n
-            --arg runId $CLOUDBEES_RUN_ID
-            --arg runAttempt $CLOUDBEES_RUN_ATTEMPT
-            --arg name $inputName
-            --arg url $inputUrl
-            --arg version $inputVersion
-          "
-          
+          set -- \
+            -n \
+            --arg runId "$CLOUDBEES_RUN_ID" \
+            --arg runAttempt "$CLOUDBEES_RUN_ATTEMPT" \
+            --arg name "$inputName" \
+            --arg url "$inputUrl" \
+            --arg version "$inputVersion"
+
           jq_template='{
             runId: $runId,
             runAttempt: $runAttempt,
@@ -123,32 +122,35 @@ runs:
   
           if [ -n "$inputLabels" ]; then
             formatted_labels=$(echo "$inputLabels" | sed -e 's/[][]//g' | awk -v RS=, -v ORS=, '{ gsub(/^[ \t\r\n]+|[ \t\r\n]+$/, "");  gsub(/\\"/, "\\\\\""); gsub(/"/, "\\\""); printf "\"%s\",", $0 }' | sed 's/,$//' | sed 's/^/[/; s/$/]/')
-            jq_args="$jq_args --argjson labels $formatted_labels "
+            set -- "$@" --argjson labels "$formatted_labels"
             jq_template="$jq_template + ( \$labels | select(length > 0) | {labels: .} ) "
           fi
   
           if [ -n "$inputCommit" ]; then
-            jq_args="$jq_args --arg commitId $inputCommit --arg repositoryUrl $inputRepositoryUrl --arg ref $inputRef "
+            set -- "$@" \
+                --arg commitId "$inputCommit" \
+                --arg repositoryUrl "$inputRepositoryUrl" \
+                --arg ref "$inputRef"
             jq_template="$jq_template + ( \$commitId | select(length > 0) | {commit: {repositoryUrl: \$repositoryUrl, commitId: \$commitId, ref: \$ref}} ) "
           fi
   
           if [ -n "$inputDigest" ]; then
-            jq_args="$jq_args --arg digest $inputDigest "
+            set -- "$@" --arg digest "$inputDigest"
             jq_template="$jq_template + ( \$digest      | select(length > 0)      | {digest: . } ) "
           fi
   
           if [ -n "$inputComponentId" ]; then
-            jq_args="$jq_args --arg componentId $inputComponentId "
+            set -- "$@" --arg componentId "$inputComponentId"
             jq_template="$jq_template + ( \$componentId | select(length > 0)      | {componentId: .} ) "
           fi
         
           if [ -n "$inputType" ]; then
-            jq_args="$jq_args --arg type $inputType "
+            set -- "$@" --arg type "$inputType"
             jq_template="$jq_template + ( \$type | select(length > 0)      | {type: .} ) "
           fi
-  
-          /usr/bin/jq $jq_args "$jq_template" > /tmp/payload.json
-  
+
+          /usr/bin/jq "$@" "$jq_template" > /tmp/payload.json
+        
           # Display the generated payload
           echo "Request payload:"
           print_inputs
