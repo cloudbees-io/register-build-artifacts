@@ -101,8 +101,6 @@ runs:
           inputType=$(echo "$artifact" | /usr/bin/jq -r '.type // empty')
           inputComponentId=$(echo "$artifact" | /usr/bin/jq -r '.componentId // empty')
           
-          formatted_labels=$(echo "$inputLabels" | sed -e 's/[][]//g' | awk -v RS=, -v ORS=, '{ gsub(/^[ \t\r\n]+|[ \t\r\n]+$/, "");  gsub(/\\"/, "\\\\\""); gsub(/"/, "\\\""); printf "\"%s\",", $0 }' | sed 's/,$//' | sed 's/^/[/; s/$/]/')
-        
           echo "Registering artifact $((i + 1)) of $artifact_count: $inputName, version $inputVersion"
           
           # Create JSON payload
@@ -123,7 +121,8 @@ runs:
             version: $version
           }'
   
-          if [ -n "$formatted_labels" ]; then
+          if [ -n "$inputLabels" ]; then
+            formatted_labels=$(echo "$inputLabels" | sed -e 's/[][]//g' | awk -v RS=, -v ORS=, '{ gsub(/^[ \t\r\n]+|[ \t\r\n]+$/, "");  gsub(/\\"/, "\\\\\""); gsub(/"/, "\\\""); printf "\"%s\",", $0 }' | sed 's/,$//' | sed 's/^/[/; s/$/]/')
             jq_args="$jq_args --argjson labels $formatted_labels "
             jq_template="$jq_template + ( \$labels | select(length > 0) | {labels: .} ) "
           fi
