@@ -1,7 +1,7 @@
 = CloudBees action: Register build artifacts
 
-Use this action to register one or more artifact versions in CloudBees Unify from a workflow run.
-The action accepts a JSON array of artifact metadata objects, allowing you to register multiple artifacts in a single run.
+Use this action to register multiple artifact versions in CloudBees Unify from a workflow run.
+The action accepts a JSON array of artifact metadata objects, allowing you to register multiple artifacts in a single step.
 
 :tip-caption: :bulb:
 TIP: When registering just one artifact version, you can use link:https://github.com/cloudbees-io/register-build-artifact[register-build-artifact] as an alternative to this action.
@@ -41,15 +41,15 @@ Do not include the `register-build-artifacts` action for the same artifact versi
     * `url` — artifact URL (**required**)
     * `digest` — digest (**optional**)
     * `labels` — list of labels (**optional**)
-    * `commit` — commit info object (**optional**)
-    * `repositoryUrl` — repository URL (**optional**)
-    * `ref` — branch or tag reference (**optional**)
+    * `commit` — commit ID from the source repository where the artifact was built ^<<footnote,[1]>>^ (**optional**)
+    * `repositoryUrl` — repository URL ^<<footnote,[1]>>^ (**optional**)
+    * `ref` — branch or tag reference ^<<footnote,[1]>>^ (**optional**)
     * `componentId` — component identifier (**optional**)
 |===
 
 [#footnote]
-^[1]^ By default, this action associates the artifact version with the code commit associated with the workflow run in the workflow's repository/branch.
-If a different commit/repository/branch has been checked out for building the artifact, specify that commit ID instead. If you do not want to associate a commit with this artifact version, specify an empty commit.
+^[1]^ Unlike the link:https://github.com/cloudbees-io/register-build-artifact[register-build-artifact] action, by default this action does not associate the artifact version with the code commit associated with the workflow run in the workflow's repository/branch.
+If you want to associate a commit with this artifact version, specify the commit, repository and branch to use.
 
 == Outputs
 
