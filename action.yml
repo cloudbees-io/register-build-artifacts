@@ -100,8 +100,8 @@ runs:
           inputRef=$(echo "$artifact" | /usr/bin/jq -r '.ref // empty')
           inputType=$(echo "$artifact" | /usr/bin/jq -r '.type // empty')
           inputComponentId=$(echo "$artifact" | /usr/bin/jq -r '.componentId // empty')
-        
-          formatted_labels=$(echo "$inputLabels" | awk -F',' '{for(i=1;i<=NF;i++){gsub(/^[ \t\r\n]+|[ \t\r\n]+$/, "", $i); printf "\"%s\"%s", $i, (i<NF?",":"")}}' | sed 's/^/[/; s/$/]/')
+          
+          formatted_labels=$(echo "$inputLabels" | sed -e 's/[][]//g' | awk -v RS=, -v ORS=, '{ gsub(/^[ \t\r\n]+|[ \t\r\n]+$/, "");  gsub(/\\"/, "\\\\\""); gsub(/"/, "\\\""); printf "\"%s\",", $0 }' | sed 's/,$//' | sed 's/^/[/; s/$/]/')
         
           echo "Registering artifact $((i + 1)) of $artifact_count: $inputName, version $inputVersion"
           
