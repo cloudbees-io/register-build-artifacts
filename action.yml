@@ -16,6 +16,7 @@ inputs:
         - repositoryUrl (optional)
         - ref (optional)
         - componentId (optional)
+        - type (optional)
     required: true
 
 outputs:
@@ -73,6 +74,7 @@ runs:
           printf "| \033[1m%-20s\033[0m | %-50s |\n" "commit" "$inputCommit"
           printf "| \033[1m%-20s\033[0m | %-50s |\n" "repository-url" "$inputRepositoryUrl"
           printf "| \033[1m%-20s\033[0m | %-50s |\n" "ref" "$inputRef"
+          printf "| \033[1m%-20s\033[0m | %-50s |\n" "type" "$inputType"
           fold_and_print "labels" "$inputLabels"
           echo "+----------------------+----------------------------------------------------+"        
         }
@@ -96,6 +98,7 @@ runs:
           inputCommit=$(echo "$artifact" | /usr/bin/jq -r '.commit // empty')
           inputRepositoryUrl=$(echo "$artifact" | /usr/bin/jq -r '.repositoryUrl // empty')
           inputRef=$(echo "$artifact" | /usr/bin/jq -r '.ref // empty')
+          inputType=$(echo "$artifact" | /usr/bin/jq -r '.type // empty')
           inputComponentId=$(echo "$artifact" | /usr/bin/jq -r '.componentId // empty')
         
           formatted_labels=$(echo "$inputLabels" | awk -F',' '{for(i=1;i<=NF;i++){gsub(/^[ \t\r\n]+|[ \t\r\n]+$/, "", $i); printf "\"%s\"%s", $i, (i<NF?",":"")}}' | sed 's/^/[/; s/$/]/')
@@ -138,6 +141,11 @@ runs:
           if [ -n "$inputComponentId" ]; then
             jq_args="$jq_args --arg componentId $inputComponentId "
             jq_template="$jq_template + ( \$componentId | select(length > 0)      | {componentId: .} ) "
+          fi
+        
+          if [ -n "$inputType" ]; then
+            jq_args="$jq_args --arg type $inputType "
+            jq_template="$jq_template + ( \$type | select(length > 0)      | {type: .} ) "
           fi
   
           /usr/bin/jq $jq_args "$jq_template" > /tmp/payload.json
