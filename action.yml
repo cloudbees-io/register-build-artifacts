@@ -1,7 +1,7 @@
 apiVersion: automation.cloudbees.io/v1alpha1
 kind: action
 name: 'Register build artifacts'
-description: 'Creates an artifact versions association with the workflow run.'
+description: 'Registers artifact versions in CloudBees Unify for artifacts produced during a workflow run.'
 
 inputs:
   artifact-metadata:
