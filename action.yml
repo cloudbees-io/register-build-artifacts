@@ -72,7 +72,7 @@ runs:
           fold_and_print "digest" "$inputDigest"
           printf "| \033[1m%-20s\033[0m | %-50s |\n" "component-id" "$inputComponentId"
           printf "| \033[1m%-20s\033[0m | %-50s |\n" "commit" "$inputCommit"
-          printf "| \033[1m%-20s\033[0m | %-50s |\n" "repository-url" "$inputRepositoryUrl"
+          fold_and_print "repository-url" "$inputRepositoryUrl"
           printf "| \033[1m%-20s\033[0m | %-50s |\n" "ref" "$inputRef"
           printf "| \033[1m%-20s\033[0m | %-50s |\n" "type" "$inputType"
           fold_and_print "labels" "$inputLabels"
