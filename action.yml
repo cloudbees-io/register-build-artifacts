@@ -32,6 +32,9 @@ runs:
       uses: docker://esolang/jq:latest
       run: |
         
+        echo "Input artifact-metadata: $INPUT_METADATA"
+        echo "--------------------------------"
+        
         if [ -z "$INPUT_METADATA" ]; then
           echo "Error: artifact-metadata input is required."
           exit 1
@@ -141,6 +144,10 @@ runs:
           payload="$payload }"
           # Save payload to a temporary file
           echo "$payload" > /tmp/payload.json
+        
+          echo "Generated payload JSON:"
+          cat /tmp/payload.json
+          echo "--------------------------------"
         
           # Display the generated payload
           echo "Request payload:"
