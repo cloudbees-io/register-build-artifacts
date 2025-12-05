@@ -79,6 +79,66 @@ runs:
           echo "+----------------------+----------------------------------------------------+"        
         }
         
+        # Parse labels string into JSON array
+        parse_labels_to_json() {
+          input="$1"
+          labels_json="["
+          field=""
+          in_quotes=0
+          escape=0
+          
+          i=1
+          len=${#input}
+          
+          add_field() {
+            f=$1
+            # Trim leading/trailing spaces
+            f=$(echo "$f" | sed 's/^ *//;s/ *$//')
+            # JSON-escape: backslash and quotes
+            f=$(printf '%s' "$f" | sed 's/\\/\\\\/g; s/"/\\"/g')
+            # Add to JSON array
+            if [ "$labels_json" != "[" ]; then
+              labels_json="$labels_json, "
+            fi
+            labels_json="$labels_json\"$f\""
+          }
+          
+          while [ $i -le $len ]; do
+            c=$(printf '%s' "$input" | cut -c $i)
+            if [ "$escape" -eq 1 ]; then
+              field="$field$c"
+              escape=0
+            elif [ "$c" = "\\" ]; then
+              escape=1
+            elif [ "$c" = '"' ]; then
+              in_quotes=$((1-in_quotes))
+              field="$field$c"
+            elif [ "$c" = "," ] && [ "$in_quotes" -eq 0 ]; then
+              add_field "$field"
+              field=""
+              # Skip spaces/tabs after comma
+              while [ $i -lt $len ]; do
+                n=$(printf '%s' "$input" | cut -c $((i+1)))
+                  case "$n" in
+                    " " | "	") i=$((i+1));;
+                    *) break;;
+                esac
+              done
+            else
+              field="$field$c"
+            fi
+            
+            i=$((i+1))
+          done
+          
+          # Add the last field
+          add_field "$field"
+          
+          labels_json="$labels_json]"
+          # Final output
+          echo "$labels_json"
+        }
+        
         # Parse the artifact-metadata input JSON array and register each artifact
         echo "Registering build artifacts..."
         artifact_count=$(echo "$INPUT_METADATA" | /usr/bin/jq 'length')
@@ -88,6 +148,9 @@ runs:
         registered_ids_json="{}"
         
         for i in $(seq 0 $((artifact_count - 1))); do
+          payload=""
+          command_failed=0
+        
           artifact=$(echo "$INPUT_METADATA" | /usr/bin/jq ".[$i]")
           
           inputName=$(echo "$artifact" | /usr/bin/jq -r '.name')
@@ -103,53 +166,42 @@ runs:
           
           echo "Registering artifact $((i + 1)) of $artifact_count: $inputName, version $inputVersion"
           
-          # Create JSON payload
-          set -- \
-            -n \
-            --arg runId "$CLOUDBEES_RUN_ID" \
-            --arg runAttempt "$CLOUDBEES_RUN_ATTEMPT" \
-            --arg name "$inputName" \
-            --arg url "$inputUrl" \
-            --arg version "$inputVersion"
-
-          jq_template='{
-            runId: $runId,
-            runAttempt: $runAttempt,
-            name: $name,
-            url: $url,
-            version: $version
-          }'
+          # Create the payload JSON file
+          payload="$payload { \"runId\": \"$CLOUDBEES_RUN_ID\", \"runAttempt\": \"$CLOUDBEES_RUN_ATTEMPT\"" 
+          payload="$payload, \"name\": \"$inputName\", \"url\": \"$inputUrl\", \"version\": \"$inputVersion\""
   
-          if [ -n "$inputLabels" ]; then
-            formatted_labels=$(echo "$inputLabels" | sed -e 's/[][]//g' | awk -v RS=, -v ORS=, '{ gsub(/^[ \t\r\n]+|[ \t\r\n]+$/, "");  gsub(/\\"/, "\\\\\""); gsub(/"/, "\\\""); printf "\"%s\",", $0 }' | sed 's/,$//' | sed 's/^/[/; s/$/]/')
-            set -- "$@" --argjson labels "$formatted_labels"
-            jq_template="$jq_template + ( \$labels | select(length > 0) | {labels: .} ) "
+           # Add the commit info if commit sha is provided
+          if [ -n "$inputCommit" ];
+          then       
+            payload="$payload,  \"commit\" : {"
+            payload="$payload, \"repositoryUrl\": \"$inputRepositoryUrl\""
+            payload="$payload, \"commitId\": \"$inputCommit\""
+            payload="$payload \"ref\": \"$inputRef\""
+            payload="$payload }"
           fi
   
-          if [ -n "$inputCommit" ]; then
-            set -- "$@" \
-                --arg commitId "$inputCommit" \
-                --arg repositoryUrl "$inputRepositoryUrl" \
-                --arg ref "$inputRef"
-            jq_template="$jq_template + ( \$commitId | select(length > 0) | {commit: {repositoryUrl: \$repositoryUrl, commitId: \$commitId, ref: \$ref}} ) "
+          # Add the digest parameter if provided
+          if [ -n "$inputDigest" ]; 
+          then
+            payload="$payload, \"digest\": \"$inputDigest\""
           fi
   
-          if [ -n "$inputDigest" ]; then
-            set -- "$@" --arg digest "$inputDigest"
-            jq_template="$jq_template + ( \$digest      | select(length > 0)      | {digest: . } ) "
+          # Add the labels parameter if provided
+          if [ -n "$inputLabels" ]; 
+          then
+            # Convert labels to JSON array format
+            formatted_labels=$(parse_labels_to_json "$inputLabels")           
+            payload="$payload, \"labels\": $formatted_labels"
           fi
-  
-          if [ -n "$inputComponentId" ]; then
-            set -- "$@" --arg componentId "$inputComponentId"
-            jq_template="$jq_template + ( \$componentId | select(length > 0)      | {componentId: .} ) "
+          
+          # Add the componentId parameter if provided
+          if [ -n "$inputComponentId" ];
+          then
+            payload="$payload, \"componentId\": \"$INPUT_COMPONENT_ID\""
           fi
-        
-          if [ -n "$inputType" ]; then
-            set -- "$@" --arg type "$inputType"
-            jq_template="$jq_template + ( \$type | select(length > 0)      | {type: .} ) "
-          fi
-
-          /usr/bin/jq "$@" "$jq_template" > /tmp/payload.json
+          payload="$payload }"
+          # Save payload to a temporary file
+          echo "$payload" > /tmp/payload.json
         
           # Display the generated payload
           echo "Request payload:"
