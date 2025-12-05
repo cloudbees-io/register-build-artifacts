@@ -40,11 +40,12 @@ Do not include the `register-build-artifacts` action for the same artifact versi
     * `version` — version (**required**)
     * `url` — artifact URL (**required**)
     * `digest` — digest (**optional**)
-    * `labels` — list of labels (**optional**)
+    * `labels` — JSON array of strings (**optional**)
     * `commit` — commit ID from the source repository where the artifact was built ^<<footnote,[1]>>^ (**optional**)
     * `repositoryUrl` — repository URL ^<<footnote,[1]>>^ (**optional**)
     * `ref` — branch or tag reference ^<<footnote,[1]>>^ (**optional**)
     * `componentId` — component identifier (**optional**)
+    * `type` — type of artifact, e.g., `docker`, `helm`, `maven`, etc. This field is for display purposes only. (**optional**)
 |===
 
 [#footnote]
@@ -83,7 +84,8 @@ jobs:
               {
                 "name": "myApp",
                 "version": "1.0.0",
-                "url": "docker.io/myapp/myimg:1.0.0"
+                "url": "docker.io/myapp/myimg:1.0.0",
+                "type": "docker"
               }
             ]
 ----
@@ -103,18 +105,25 @@ jobs:
               {
                 "name": "myApp",
                 "version": "1.0.0",
-                "url": "docker.io/myapp/myimg:1.0.0"
+                "url": "docker.io/myapp/myimg:1.0.0",
+                "type": "docker"
               },
               {
                 "name": "myService",
                 "url": "docker.io/myorg/myservice:2.3.4",
                 "version": "2.3.4",
-                "labels": "api, backend, stable",
+                "labels": [
+                  "api",
+                  "custom, label",
+                  "\"custom label\"",
+                  "backend:v1"
+                ],
                 "repositoryUrl": "https://github.com/example/myservice.git",
                 "commitId": "789xyz654wvu",
                 "ref": "refs/tags/v2.3.4",
                 "digest": "sha256:abcdef1234567890",
-                "componentId": "fa0592f9-88f8-4f5d-9f37-580a93ba55ce"
+                "componentId": "fa0592f9-88f8-4f5d-9f37-580a93ba55ce",
+                "type": "docker"
               }
             ]
 ----

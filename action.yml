@@ -16,6 +16,7 @@ inputs:
         - repositoryUrl (optional)
         - ref (optional)
         - componentId (optional)
+        - type (optional)
     required: true
 
 outputs:
@@ -30,7 +31,6 @@ runs:
       name: Register Build Artifacts
       uses: docker://esolang/jq:latest
       run: |
-        
         if [ -z "$INPUT_METADATA" ]; then
           echo "Error: artifact-metadata input is required."
           exit 1
@@ -71,8 +71,9 @@ runs:
           fold_and_print "digest" "$inputDigest"
           printf "| \033[1m%-20s\033[0m | %-50s |\n" "component-id" "$inputComponentId"
           printf "| \033[1m%-20s\033[0m | %-50s |\n" "commit" "$inputCommit"
-          printf "| \033[1m%-20s\033[0m | %-50s |\n" "repository-url" "$inputRepositoryUrl"
+          fold_and_print "repository-url" "$inputRepositoryUrl"
           printf "| \033[1m%-20s\033[0m | %-50s |\n" "ref" "$inputRef"
+          printf "| \033[1m%-20s\033[0m | %-50s |\n" "type" "$inputType"
           fold_and_print "labels" "$inputLabels"
           echo "+----------------------+----------------------------------------------------+"        
         }
@@ -86,6 +87,9 @@ runs:
         registered_ids_json="{}"
         
         for i in $(seq 0 $((artifact_count - 1))); do
+          payload=""
+          command_failed=0
+        
           artifact=$(echo "$INPUT_METADATA" | /usr/bin/jq ".[$i]")
           
           inputName=$(echo "$artifact" | /usr/bin/jq -r '.name')
@@ -96,52 +100,47 @@ runs:
           inputCommit=$(echo "$artifact" | /usr/bin/jq -r '.commit // empty')
           inputRepositoryUrl=$(echo "$artifact" | /usr/bin/jq -r '.repositoryUrl // empty')
           inputRef=$(echo "$artifact" | /usr/bin/jq -r '.ref // empty')
+          inputType=$(echo "$artifact" | /usr/bin/jq -r '.type // empty')
           inputComponentId=$(echo "$artifact" | /usr/bin/jq -r '.componentId // empty')
-        
-          formatted_labels=$(echo "$inputLabels" | awk -F',' '{for(i=1;i<=NF;i++){gsub(/^[ \t\r\n]+|[ \t\r\n]+$/, "", $i); printf "\"%s\"%s", $i, (i<NF?",":"")}}' | sed 's/^/[/; s/$/]/')
-        
+          
           echo "Registering artifact $((i + 1)) of $artifact_count: $inputName, version $inputVersion"
           
-          # Create JSON payload
-          jq_args="
-            -n
-            --arg runId $CLOUDBEES_RUN_ID
-            --arg runAttempt $CLOUDBEES_RUN_ATTEMPT
-            --arg name $inputName
-            --arg url $inputUrl
-            --arg version $inputVersion
-          "
+          # Create the payload JSON file
+          payload="$payload { \"runId\": \"$CLOUDBEES_RUN_ID\", \"runAttempt\": \"$CLOUDBEES_RUN_ATTEMPT\"" 
+          payload="$payload, \"name\": \"$inputName\", \"url\": \"$inputUrl\", \"version\": \"$inputVersion\""
+  
+           # Add the commit info if commit sha is provided
+          if [ -n "$inputCommit" ];
+          then       
+            payload="$payload,  \"commit\" : {"
+            payload="$payload \"repositoryUrl\": \"$inputRepositoryUrl\""
+            payload="$payload, \"commitId\": \"$inputCommit\""
+            payload="$payload, \"ref\": \"$inputRef\""
+            payload="$payload }"
+          fi
+  
+          # Add the digest parameter if provided
+          if [ -n "$inputDigest" ]; 
+          then
+            payload="$payload, \"digest\": \"$inputDigest\""
+          fi
+  
+          # Add the labels parameter if provided
+          if [ -n "$inputLabels" ]; 
+          then
+            # Convert labels to JSON array format
+            payload="$payload, \"labels\": $inputLabels"
+          fi
           
-          jq_template='{
-            runId: $runId,
-            runAttempt: $runAttempt,
-            name: $name,
-            url: $url,
-            version: $version
-          }'
-  
-          if [ -n "$formatted_labels" ]; then
-            jq_args="$jq_args --argjson labels $formatted_labels "
-            jq_template="$jq_template + ( \$labels | select(length > 0) | {labels: .} ) "
+          # Add the componentId parameter if provided
+          if [ -n "$inputComponentId" ];
+          then
+            payload="$payload, \"componentId\": \"$INPUT_COMPONENT_ID\""
           fi
-  
-          if [ -n "$inputCommit" ]; then
-            jq_args="$jq_args --arg commitId $inputCommit --arg repositoryUrl $inputRepositoryUrl --arg ref $inputRef "
-            jq_template="$jq_template + ( \$commitId | select(length > 0) | {commit: {repositoryUrl: \$repositoryUrl, commitId: \$commitId, ref: \$ref}} ) "
-          fi
-  
-          if [ -n "$inputDigest" ]; then
-            jq_args="$jq_args --arg digest $inputDigest "
-            jq_template="$jq_template + ( \$digest      | select(length > 0)      | {digest: . } ) "
-          fi
-  
-          if [ -n "$inputComponentId" ]; then
-            jq_args="$jq_args --arg componentId $inputComponentId "
-            jq_template="$jq_template + ( \$componentId | select(length > 0)      | {componentId: .} ) "
-          fi
-  
-          /usr/bin/jq $jq_args "$jq_template" > /tmp/payload.json
-  
+          payload="$payload }"
+          # Save payload to a temporary file
+          echo "$payload" > /tmp/payload.json
+        
           # Display the generated payload
           echo "Request payload:"
           print_inputs
