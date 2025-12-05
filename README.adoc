@@ -40,7 +40,7 @@ Do not include the `register-build-artifacts` action for the same artifact versi
     * `version` — version (**required**)
     * `url` — artifact URL (**required**)
     * `digest` — digest (**optional**)
-    * `labels` — list of labels (**optional**)
+    * `labels` — JSON array of strings (**optional**)
     * `commit` — commit ID from the source repository where the artifact was built ^<<footnote,[1]>>^ (**optional**)
     * `repositoryUrl` — repository URL ^<<footnote,[1]>>^ (**optional**)
     * `ref` — branch or tag reference ^<<footnote,[1]>>^ (**optional**)
@@ -112,7 +112,12 @@ jobs:
                 "name": "myService",
                 "url": "docker.io/myorg/myservice:2.3.4",
                 "version": "2.3.4",
-                "labels": "api, backend, stable",
+                "labels": [
+                  "api",
+                  "custom, label",
+                  "\"custom label\"",
+                  "backend:v1"
+                ],
                 "repositoryUrl": "https://github.com/example/myservice.git",
                 "commitId": "789xyz654wvu",
                 "ref": "refs/tags/v2.3.4",

@@ -79,66 +79,6 @@ runs:
           echo "+----------------------+----------------------------------------------------+"        
         }
         
-        # Parse labels string into JSON array
-        parse_labels_to_json() {
-          input="$1"
-          labels_json="["
-          field=""
-          in_quotes=0
-          escape=0
-          
-          i=1
-          len=${#input}
-          
-          add_field() {
-            f=$1
-            # Trim leading/trailing spaces
-            f=$(echo "$f" | sed 's/^ *//;s/ *$//')
-            # JSON-escape: backslash and quotes
-            f=$(printf '%s' "$f" | sed 's/\\/\\\\/g; s/"/\\"/g')
-            # Add to JSON array
-            if [ "$labels_json" != "[" ]; then
-              labels_json="$labels_json, "
-            fi
-            labels_json="$labels_json\"$f\""
-          }
-          
-          while [ $i -le $len ]; do
-            c=$(printf '%s' "$input" | cut -c $i)
-            if [ "$escape" -eq 1 ]; then
-              field="$field$c"
-              escape=0
-            elif [ "$c" = "\\" ]; then
-              escape=1
-            elif [ "$c" = '"' ]; then
-              in_quotes=$((1-in_quotes))
-              field="$field$c"
-            elif [ "$c" = "," ] && [ "$in_quotes" -eq 0 ]; then
-              add_field "$field"
-              field=""
-              # Skip spaces/tabs after comma
-              while [ $i -lt $len ]; do
-                n=$(printf '%s' "$input" | cut -c $((i+1)))
-                  case "$n" in
-                    " " | "	") i=$((i+1));;
-                    *) break;;
-                esac
-              done
-            else
-              field="$field$c"
-            fi
-            
-            i=$((i+1))
-          done
-          
-          # Add the last field
-          add_field "$field"
-          
-          labels_json="$labels_json]"
-          # Final output
-          echo "$labels_json"
-        }
-        
         # Parse the artifact-metadata input JSON array and register each artifact
         echo "Registering build artifacts..."
         artifact_count=$(echo "$INPUT_METADATA" | /usr/bin/jq 'length')
@@ -190,8 +130,7 @@ runs:
           if [ -n "$inputLabels" ]; 
           then
             # Convert labels to JSON array format
-            formatted_labels=$(parse_labels_to_json "$inputLabels")           
-            payload="$payload, \"labels\": $formatted_labels"
+            payload="$payload, \"labels\": $inputLabels"
           fi
           
           # Add the componentId parameter if provided
