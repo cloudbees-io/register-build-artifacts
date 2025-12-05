@@ -117,9 +117,9 @@ runs:
           if [ -n "$inputCommit" ];
           then       
             payload="$payload,  \"commit\" : {"
-            payload="$payload, \"repositoryUrl\": \"$inputRepositoryUrl\""
+            payload="$payload \"repositoryUrl\": \"$inputRepositoryUrl\""
             payload="$payload, \"commitId\": \"$inputCommit\""
-            payload="$payload \"ref\": \"$inputRef\""
+            payload="$payload, \"ref\": \"$inputRef\""
             payload="$payload }"
           fi
   
