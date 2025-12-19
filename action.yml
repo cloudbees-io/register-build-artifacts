@@ -137,6 +137,13 @@ runs:
           then
             payload="$payload, \"componentId\": \"$INPUT_COMPONENT_ID\""
           fi
+          
+          # Add the type parameter if provided
+          if [ -n "$inputType" ];
+          then
+            payload="$payload, \"type\": \"$inputType\""
+          fi
+        
           payload="$payload }"
           # Save payload to a temporary file
           echo "$payload" > /tmp/payload.json
