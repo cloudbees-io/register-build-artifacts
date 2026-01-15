@@ -173,7 +173,7 @@ runs:
           # Extract the artifactId
           id=$(echo "$response" | /usr/bin/jq -r '.id // empty')
 
-          registered_ids_json=$(echo "$registered_ids_json" | /usr/bin/jq --arg k "$inputUrl" --arg v "$id" '. + {($k): $v}')
+          registered_ids_json=$(echo "$registered_ids_json" | /usr/bin/jq --compact-output --arg k "$inputUrl" --arg v "$id" '. + {($k): $v}')
         
           # add a separator between artifacts but not after the last one
           [ $i -lt $((artifact_count - 1)) ] && printf "\n\n\n"
