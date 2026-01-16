@@ -29,13 +29,13 @@ runs:
   steps:
     - id: register-build-artifacts
       name: Register Build Artifacts
-      uses: docker://esolang/jq:latest
+      uses: docker://public.ecr.aws/l7o7z1g8/actions/cb-utils:main-0.1.9
       run: |
         if [ -z "$INPUT_METADATA" ]; then
           echo "Error: artifact-metadata input is required."
           exit 1
         fi
-        echo "$INPUT_METADATA" | /usr/bin/jq empty
+        echo "$INPUT_METADATA" | jq empty
         if [ $? -ne 0 ]; then
           echo "Error: artifact-metadata input is not valid JSON."
           exit 1
@@ -80,7 +80,7 @@ runs:
         
         # Parse the artifact-metadata input JSON array and register each artifact
         echo "Registering build artifacts..."
-        artifact_count=$(echo "$INPUT_METADATA" | /usr/bin/jq 'length')
+        artifact_count=$(echo "$INPUT_METADATA" | jq 'length')
         printf "Number of artifacts to register: $artifact_count\n\n"
         
         # Initialize an empty JSON object to hold registered artifact IDs with their URLs
@@ -90,18 +90,18 @@ runs:
           payload=""
           command_failed=0
         
-          artifact=$(echo "$INPUT_METADATA" | /usr/bin/jq ".[$i]")
+          artifact=$(echo "$INPUT_METADATA" | jq ".[$i]")
           
-          inputName=$(echo "$artifact" | /usr/bin/jq -r '.name')
-          inputVersion=$(echo "$artifact" | /usr/bin/jq -r '.version')
-          inputUrl=$(echo "$artifact" | /usr/bin/jq -r '.url')
-          inputDigest=$(echo "$artifact" | /usr/bin/jq -r '.digest // empty')
-          inputLabels=$(echo "$artifact" | /usr/bin/jq -r '.labels // empty')
-          inputCommit=$(echo "$artifact" | /usr/bin/jq -r '.commit // empty')
-          inputRepositoryUrl=$(echo "$artifact" | /usr/bin/jq -r '.repositoryUrl // empty')
-          inputRef=$(echo "$artifact" | /usr/bin/jq -r '.ref // empty')
-          inputType=$(echo "$artifact" | /usr/bin/jq -r '.type // empty')
-          inputComponentId=$(echo "$artifact" | /usr/bin/jq -r '.componentId // empty')
+          inputName=$(echo "$artifact" | jq -r '.name')
+          inputVersion=$(echo "$artifact" | jq -r '.version')
+          inputUrl=$(echo "$artifact" | jq -r '.url')
+          inputDigest=$(echo "$artifact" | jq -r '.digest // empty')
+          inputLabels=$(echo "$artifact" | jq -r '.labels // empty')
+          inputCommit=$(echo "$artifact" | jq -r '.commit // empty')
+          inputRepositoryUrl=$(echo "$artifact" | jq -r '.repositoryUrl // empty')
+          inputRef=$(echo "$artifact" | jq -r '.ref // empty')
+          inputType=$(echo "$artifact" | jq -r '.type // empty')
+          inputComponentId=$(echo "$artifact" | jq -r '.componentId // empty')
           
           echo "Registering artifact $((i + 1)) of $artifact_count: $inputName, version $inputVersion"
           
@@ -168,19 +168,19 @@ runs:
           # If successful, show the response nicely
           echo ""
           echo "CloudBees Unify API success response:"
-          echo "$response" | /usr/bin/jq || echo "$response"
+          echo "$response" | jq || echo "$response"
           
           # Extract the artifactId
-          id=$(echo "$response" | /usr/bin/jq -r '.id // empty')
+          id=$(echo "$response" | jq -r '.id // empty')
 
-          registered_ids_json=$(echo "$registered_ids_json" | /usr/bin/jq --compact-output --arg k "$inputUrl" --arg v "$id" '. + {($k): $v}')
+          registered_ids_json=$(echo "$registered_ids_json" | jq --compact-output --arg k "$inputUrl" --arg v "$id" '. + {($k): $v}')
         
           # add a separator between artifacts but not after the last one
           [ $i -lt $((artifact_count - 1)) ] && printf "\n\n\n"
         done
 
         # Store outputs
-        if [ "$(echo "$registered_ids_json" | /usr/bin/jq 'length > 0')" = "true" ]; then       
+        if [ "$(echo "$registered_ids_json" | jq 'length > 0')" = "true" ]; then       
           # Set the list of registered IDs as a JSON array output
           echo "$registered_ids_json" > $CLOUDBEES_OUTPUTS/artifact-ids
         fi
