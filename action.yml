@@ -29,7 +29,7 @@ runs:
   steps:
     - id: register-build-artifacts
       name: Register Build Artifacts
-      uses: docker://020229604682.dkr.ecr.us-east-1.amazonaws.com/actions/cb-utils:dev-test-0.1.39
+      uses: docker://020229604682.dkr.ecr.us-east-1.amazonaws.com/actions/cb-utils:dev-test-0.1.40
       run: |
         if [ -z "$INPUT_METADATA" ]; then
           echo "Error: artifact-metadata input is required."
