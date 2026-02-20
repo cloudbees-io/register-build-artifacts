@@ -153,7 +153,7 @@ runs:
           print_inputs
         
           # Make CloudBees Unify API call to create artifact_info record
-          response=$(curl --retry 5 --retry-delay 10 --retry-all-errors --silent --show-error --fail-with-body \
+          response=$(curl --retry 30 --retry-delay 10 --retry-all-errors --silent --show-error --fail-with-body \
             -X 'POST' "$URL/v3/artifactinfos" \
             -H "Authorization: Bearer $JWT" \
             -H 'Content-Type: application/json' \
