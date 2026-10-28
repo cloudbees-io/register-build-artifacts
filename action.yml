@@ -153,12 +153,17 @@ runs:
           print_inputs
         
           # Make CloudBees Unify API call to create artifact_info record
-          response=$(curl --retry 30 --retry-delay 10 --retry-all-errors --silent --show-error --fail-with-body \
+          # Write the body to a file, not stdout: curl truncates the file before each retry, while on stdout
+          # the error bodies of failed attempts would be prepended to the final response and break jq parsing
+          rm -f /tmp/response.json
+          curl --retry 30 --retry-delay 10 --retry-all-errors --silent --show-error --fail-with-body \
             -X 'POST' "$URL/v3/artifactinfos" \
             -H "Authorization: Bearer $JWT" \
             -H 'Content-Type: application/json' \
-            --data-binary '@/tmp/payload.json') || command_failed=1
-          
+            --data-binary '@/tmp/payload.json' \
+            --output /tmp/response.json || command_failed=1
+          response=$(cat /tmp/response.json 2>/dev/null)
+
           # Check if the API call failed
           if [ ${command_failed:-0} -eq 1 ]; then
             echo "CloudBees Unify API call failed with error: $response"
@@ -171,7 +176,10 @@ runs:
           echo "$response" | jq || echo "$response"
           
           # Extract the artifactId
-          id=$(echo "$response" | jq -r '.id // empty')
+          id=$(echo "$response" | jq -r '.id // empty') || {
+            echo "Error: CloudBees Unify API response is not valid JSON."
+            exit 1
+          }
 
           registered_ids_json=$(echo "$registered_ids_json" | jq --compact-output --arg k "$inputUrl" --arg v "$id" '. + {($k): $v}')
         
