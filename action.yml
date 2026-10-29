@@ -87,7 +87,6 @@ runs:
         registered_ids_json="{}"
         
         for i in $(seq 0 $((artifact_count - 1))); do
-          payload=""
           command_failed=0
         
           artifact=$(echo "$INPUT_METADATA" | jq ".[$i]")
@@ -96,7 +95,7 @@ runs:
           inputVersion=$(echo "$artifact" | jq -r '.version')
           inputUrl=$(echo "$artifact" | jq -r '.url')
           inputDigest=$(echo "$artifact" | jq -r '.digest // empty')
-          inputLabels=$(echo "$artifact" | jq -r '.labels // empty')
+          inputLabels=$(echo "$artifact" | jq --compact-output '.labels // empty')
           inputCommit=$(echo "$artifact" | jq -r '.commit // empty')
           inputRepositoryUrl=$(echo "$artifact" | jq -r '.repositoryUrl // empty')
           inputRef=$(echo "$artifact" | jq -r '.ref // empty')
@@ -105,48 +104,33 @@ runs:
           
           echo "Registering artifact $((i + 1)) of $artifact_count: $inputName, version $inputVersion"
           
-          # Create the payload JSON file
-          payload="$payload { \"runId\": \"$CLOUDBEES_RUN_ID\", \"runAttempt\": \"$CLOUDBEES_RUN_ATTEMPT\"" 
-          payload="$payload, \"name\": \"$inputName\", \"url\": \"$inputUrl\", \"version\": \"$inputVersion\""
-  
-           # Add the commit info if commit sha is provided
-          if [ -n "$inputCommit" ];
-          then       
-            payload="$payload,  \"commit\" : {"
-            payload="$payload \"repositoryUrl\": \"$inputRepositoryUrl\""
-            payload="$payload, \"commitId\": \"$inputCommit\""
-            payload="$payload, \"ref\": \"$inputRef\""
-            payload="$payload }"
-          fi
-  
-          # Add the digest parameter if provided
-          if [ -n "$inputDigest" ]; 
-          then
-            payload="$payload, \"digest\": \"$inputDigest\""
-          fi
-  
-          # Add the labels parameter if provided
-          if [ -n "$inputLabels" ]; 
-          then
-            # Convert labels to JSON array format
-            payload="$payload, \"labels\": $inputLabels"
-          fi
-          
-          # Add the componentId parameter if provided
-          if [ -n "$inputComponentId" ];
-          then
-            payload="$payload, \"componentId\": \"$INPUT_COMPONENT_ID\""
-          fi
-          
-          # Add the type parameter if provided
-          if [ -n "$inputType" ];
-          then
-            payload="$payload, \"type\": \"$inputType\""
-          fi
-        
-          payload="$payload }"
+          # Create the payload JSON with jq so that quotes, backslashes and control characters in the
+          # input values are escaped. Optional fields are added only when provided
+          payload=$(jq -n --compact-output \
+            --arg runId "$CLOUDBEES_RUN_ID" \
+            --arg runAttempt "$CLOUDBEES_RUN_ATTEMPT" \
+            --arg name "$inputName" \
+            --arg url "$inputUrl" \
+            --arg version "$inputVersion" \
+            --arg commit "$inputCommit" \
+            --arg repositoryUrl "$inputRepositoryUrl" \
+            --arg ref "$inputRef" \
+            --arg digest "$inputDigest" \
+            --arg labels "$inputLabels" \
+            --arg componentId "$inputComponentId" \
+            --arg type "$inputType" '
+            {runId: $runId, runAttempt: $runAttempt, name: $name, url: $url, version: $version}
+            + (if $commit != "" then {commit: {repositoryUrl: $repositoryUrl, commitId: $commit, ref: $ref}} else {} end)
+            + (if $digest != "" then {digest: $digest} else {} end)
+            + (if $labels != "" then {labels: ($labels | fromjson)} else {} end)
+            + (if $componentId != "" then {componentId: $componentId} else {} end)
+            + (if $type != "" then {type: $type} else {} end)
+          ') || {
+            echo "Error: failed to create the request payload for artifact $inputName."
+            exit 1
+          }
           # Save payload to a temporary file
-          echo "$payload" > /tmp/payload.json
+          printf '%s\n' "$payload" > /tmp/payload.json
         
           # Display the generated payload
           echo "Request payload:"
