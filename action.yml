@@ -43,10 +43,6 @@ runs:
         
         # Set the fold width to match the table column width
         FOLD_WIDTH=48
-
-        # Number of attempts and the delay in seconds between them for the CloudBees Unify API call
-        MAX_ATTEMPTS=30
-        RETRY_DELAY=10
         
         # Helper function to fold and print a parameter name and value 
         fold_and_print() {
@@ -91,13 +87,15 @@ runs:
         registered_ids_json="{}"
         
         for i in $(seq 0 $((artifact_count - 1))); do
+          command_failed=0
+        
           artifact=$(echo "$INPUT_METADATA" | jq ".[$i]")
           
           inputName=$(echo "$artifact" | jq -r '.name')
           inputVersion=$(echo "$artifact" | jq -r '.version')
           inputUrl=$(echo "$artifact" | jq -r '.url')
           inputDigest=$(echo "$artifact" | jq -r '.digest // empty')
-          inputLabels=$(echo "$artifact" | jq --compact-output '.labels // empty')
+          inputLabels=$(echo "$artifact" | jq -r '.labels // empty')
           inputCommit=$(echo "$artifact" | jq -r '.commit // empty')
           inputRepositoryUrl=$(echo "$artifact" | jq -r '.repositoryUrl // empty')
           inputRef=$(echo "$artifact" | jq -r '.ref // empty')
@@ -106,8 +104,8 @@ runs:
           
           echo "Registering artifact $((i + 1)) of $artifact_count: $inputName, version $inputVersion"
           
-          # Create the payload JSON with jq so that quotes, backslashes and control characters in the
-          # input values are escaped. Optional fields are added only when provided
+          # Create the payload JSON with jq so that quotes and backslashes in the input values are escaped,
+          # optional fields are added only when provided
           payload=$(jq -n --compact-output \
             --arg runId "$CLOUDBEES_RUN_ID" \
             --arg runAttempt "$CLOUDBEES_RUN_ATTEMPT" \
@@ -132,47 +130,30 @@ runs:
             exit 1
           }
           # Save payload to a temporary file
-          printf '%s\n' "$payload" > /tmp/payload.json
+          echo "$payload" > /tmp/payload.json
         
           # Display the generated payload
           echo "Request payload:"
           print_inputs
         
           # Make CloudBees Unify API call to create artifact_info record
-          # Retry only transient failures (connection errors, 408, 429 and 5xx). Any other 4xx means the
-          # request itself was rejected, so it fails right away instead of being repeated for minutes.
-          # The body is written to a file that is replaced on every attempt, so the final response never
-          # contains the error bodies of earlier attempts
-          attempt=1
-          while true; do
-            rm -f /tmp/response.json
-            http_code=$(curl --silent --show-error \
-              -X 'POST' "$URL/v3/artifactinfos" \
-              -H "Authorization: Bearer $JWT" \
-              -H 'Content-Type: application/json' \
-              --data-binary '@/tmp/payload.json' \
-              --output /tmp/response.json \
-              --write-out '%{http_code}') || true
-            response=$(cat /tmp/response.json 2>/dev/null) || true
+          # Write the body to a file, not stdout: curl truncates the file before each retry, while on stdout
+          # the error bodies of failed attempts would be prepended to the final response and break jq parsing
+          rm -f /tmp/response.json
+          curl --retry 30 --retry-delay 10 --retry-all-errors --silent --show-error --fail-with-body \
+            -X 'POST' "$URL/v3/artifactinfos" \
+            -H "Authorization: Bearer $JWT" \
+            -H 'Content-Type: application/json' \
+            --data-binary '@/tmp/payload.json' \
+            --output /tmp/response.json || command_failed=1
+          response=$(cat /tmp/response.json 2>/dev/null)
 
-            case "$http_code" in
-              2??) break ;;
-              000|408|429|5??) ;;
-              *)
-                echo "CloudBees Unify API call failed with HTTP status $http_code: $response"
-                exit 1
-                ;;
-            esac
-
-            if [ $attempt -ge $MAX_ATTEMPTS ]; then
-              echo "CloudBees Unify API call failed after $attempt attempts with HTTP status $http_code: $response"
-              exit 1
-            fi
-            echo "CloudBees Unify API call attempt $attempt of $MAX_ATTEMPTS failed with HTTP status $http_code, retrying in ${RETRY_DELAY}s..."
-            attempt=$((attempt + 1))
-            sleep $RETRY_DELAY
-          done
-
+          # Check if the API call failed
+          if [ ${command_failed:-0} -eq 1 ]; then
+            echo "CloudBees Unify API call failed with error: $response"
+            exit 1
+          fi
+          
           # If successful, show the response nicely
           echo ""
           echo "CloudBees Unify API success response:"
