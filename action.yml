@@ -87,7 +87,6 @@ runs:
         registered_ids_json="{}"
         
         for i in $(seq 0 $((artifact_count - 1))); do
-          payload=""
           command_failed=0
         
           artifact=$(echo "$INPUT_METADATA" | jq ".[$i]")
@@ -105,46 +104,31 @@ runs:
           
           echo "Registering artifact $((i + 1)) of $artifact_count: $inputName, version $inputVersion"
           
-          # Create the payload JSON file
-          payload="$payload { \"runId\": \"$CLOUDBEES_RUN_ID\", \"runAttempt\": \"$CLOUDBEES_RUN_ATTEMPT\"" 
-          payload="$payload, \"name\": \"$inputName\", \"url\": \"$inputUrl\", \"version\": \"$inputVersion\""
-  
-           # Add the commit info if commit sha is provided
-          if [ -n "$inputCommit" ];
-          then       
-            payload="$payload,  \"commit\" : {"
-            payload="$payload \"repositoryUrl\": \"$inputRepositoryUrl\""
-            payload="$payload, \"commitId\": \"$inputCommit\""
-            payload="$payload, \"ref\": \"$inputRef\""
-            payload="$payload }"
-          fi
-  
-          # Add the digest parameter if provided
-          if [ -n "$inputDigest" ]; 
-          then
-            payload="$payload, \"digest\": \"$inputDigest\""
-          fi
-  
-          # Add the labels parameter if provided
-          if [ -n "$inputLabels" ]; 
-          then
-            # Convert labels to JSON array format
-            payload="$payload, \"labels\": $inputLabels"
-          fi
-          
-          # Add the componentId parameter if provided
-          if [ -n "$inputComponentId" ];
-          then
-            payload="$payload, \"componentId\": \"$INPUT_COMPONENT_ID\""
-          fi
-          
-          # Add the type parameter if provided
-          if [ -n "$inputType" ];
-          then
-            payload="$payload, \"type\": \"$inputType\""
-          fi
-        
-          payload="$payload }"
+          # Create the payload JSON with jq so that quotes and backslashes in the input values are escaped,
+          # optional fields are added only when provided
+          payload=$(jq -n --compact-output \
+            --arg runId "$CLOUDBEES_RUN_ID" \
+            --arg runAttempt "$CLOUDBEES_RUN_ATTEMPT" \
+            --arg name "$inputName" \
+            --arg url "$inputUrl" \
+            --arg version "$inputVersion" \
+            --arg commit "$inputCommit" \
+            --arg repositoryUrl "$inputRepositoryUrl" \
+            --arg ref "$inputRef" \
+            --arg digest "$inputDigest" \
+            --arg labels "$inputLabels" \
+            --arg componentId "$inputComponentId" \
+            --arg type "$inputType" '
+            {runId: $runId, runAttempt: $runAttempt, name: $name, url: $url, version: $version}
+            + (if $commit != "" then {commit: {repositoryUrl: $repositoryUrl, commitId: $commit, ref: $ref}} else {} end)
+            + (if $digest != "" then {digest: $digest} else {} end)
+            + (if $labels != "" then {labels: ($labels | fromjson)} else {} end)
+            + (if $componentId != "" then {componentId: $componentId} else {} end)
+            + (if $type != "" then {type: $type} else {} end)
+          ') || {
+            echo "Error: failed to create the request payload for artifact $inputName."
+            exit 1
+          }
           # Save payload to a temporary file
           echo "$payload" > /tmp/payload.json
         
@@ -153,12 +137,17 @@ runs:
           print_inputs
         
           # Make CloudBees Unify API call to create artifact_info record
-          response=$(curl --retry 30 --retry-delay 10 --retry-all-errors --silent --show-error --fail-with-body \
+          # Write the body to a file, not stdout: curl truncates the file before each retry, while on stdout
+          # the error bodies of failed attempts would be prepended to the final response and break jq parsing
+          rm -f /tmp/response.json
+          curl --retry 30 --retry-delay 10 --retry-all-errors --silent --show-error --fail-with-body \
             -X 'POST' "$URL/v3/artifactinfos" \
             -H "Authorization: Bearer $JWT" \
             -H 'Content-Type: application/json' \
-            --data-binary '@/tmp/payload.json') || command_failed=1
-          
+            --data-binary '@/tmp/payload.json' \
+            --output /tmp/response.json || command_failed=1
+          response=$(cat /tmp/response.json 2>/dev/null)
+
           # Check if the API call failed
           if [ ${command_failed:-0} -eq 1 ]; then
             echo "CloudBees Unify API call failed with error: $response"
@@ -171,7 +160,10 @@ runs:
           echo "$response" | jq || echo "$response"
           
           # Extract the artifactId
-          id=$(echo "$response" | jq -r '.id // empty')
+          id=$(echo "$response" | jq -r '.id // empty') || {
+            echo "Error: CloudBees Unify API response is not valid JSON."
+            exit 1
+          }
 
           registered_ids_json=$(echo "$registered_ids_json" | jq --compact-output --arg k "$inputUrl" --arg v "$id" '. + {($k): $v}')
         
